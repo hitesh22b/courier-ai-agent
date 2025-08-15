@@ -5,12 +5,13 @@
 
 declare module "sst" {
   export interface Resource {
-    "Agent": {
+    "CustomerCareApi": {
       "type": "sst.aws.ApiGatewayV2"
       "url": string
     }
-    "CustomerCareApi": {
-      "type": "sst.aws.ApiGatewayV2"
+    "PythonHelloWorld": {
+      "name": string
+      "type": "sst.aws.Function"
       "url": string
     }
   }

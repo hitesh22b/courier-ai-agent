@@ -14,10 +14,15 @@ export default $config({
 
     customerCareApi.route("POST /ticket", "src/customer-care.handler");
 
-    const agent = new sst.aws.ApiGatewayV2("Agent");
-    agent.route("POST /agent", {
-      handler: "src/python/agent.handler",
-      runtime: "python3.11"
+    const pythonFunction = new sst.aws.Function("PythonHelloWorld", {
+      handler: "python_functions/src/python_functions/hello.handler",
+      runtime: "python3.12",
+      url: true,
     });
+
+    return {
+      customerCareApi: customerCareApi.url,
+      pythonFunction: pythonFunction.url,
+    };
   },
 });
