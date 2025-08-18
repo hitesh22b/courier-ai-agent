@@ -14,14 +14,32 @@ export default $config({
 
     customerCareApi.route("POST /ticket", "src/customer-care.handler");
 
+    const trackApi = new sst.aws.ApiGatewayV2("TrackApi");
+
+    trackApi.route("POST /track", "src/track-status.handler");
+
     const pythonFunction = new sst.aws.Function("PythonHelloWorld", {
       handler: "python_functions/src/python_functions/hello.handler",
       runtime: "python3.12",
       url: true,
+      link: [trackApi],
+       permissions: [
+        {
+          actions: [
+            "bedrock:InvokeModel",
+            "bedrock:InvokeModelWithResponseStream"
+          ],
+          resources: [
+            "arn:aws:bedrock:*::foundation-model/amazon.nova-micro-v1:0",
+            "arn:aws:bedrock:ap-south-1:*:inference-profile/apac.amazon.nova-micro-v1:0"
+          ]
+        }
+      ]
     });
 
     return {
       customerCareApi: customerCareApi.url,
+      trackApi: trackApi.url,
       pythonFunction: pythonFunction.url,
     };
   },
