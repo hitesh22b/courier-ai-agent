@@ -5,8 +5,6 @@ from sst import Resource
 
 SYSTEM_PROMPT = """You are a courier company assistant that can help customers track their packages and create support tickets
 
-If a customer wants to book their travel, assist them with flight options for their destination and provide them with information about the weather.
-
 Use the support_ticket tool to create customer support ticket.
 Use the track_package tool to track customer packages.
 
@@ -27,11 +25,10 @@ def track_package(package_id: str = None):
         # Get the track API URL from SST resources
         track_api_url = Resource.TrackApi.url
         
-        # Make a POST request to the track API
-        response = requests.post(
-            f"{track_api_url}/track",
+        # Make a GET request to the track API with package_id in path
+        response = requests.get(
+            f"{track_api_url}/track/{package_id}",
             headers={"Content-Type": "application/json"},
-            json={"package_id": package_id},
             timeout=10
         )
         
@@ -56,15 +53,86 @@ def track_package(package_id: str = None):
         return {"error": f"Unexpected error: {str(e)}", "package_id": package_id}
 
 
-def handler(event, _context) -> dict:
+@tool
+def create_support_ticket(email: str = None, phoneNo: str = None, issueDescription: str = None, packageId: str = None):
+    """
+    Create a customer support ticket
+    Args:
+        email: Customer's email address
+        phoneNo: Customer's phone number
+        issueDescription: Description of the issue
+        packageId: Related package ID (optional)
+    """
+    if not email or not phoneNo or not issueDescription:
+        return {"error": "Missing required fields: email, phoneNo, issueDescription"}
+    
     try:
-        # Get the prompt from the event
-        prompt = "Where is my package?"
+        # Get the customer care API URL from SST resources
+        customer_care_url = Resource.CustomerCareApi.url
+        
+        # Prepare the request payload
+        payload = {
+            "email": email,
+            "phoneNo": phoneNo,
+            "issueDescription": issueDescription,
+            "packageId": packageId or "N/A"  # Use N/A if no package ID provided
+        }
+        
+        # Make a POST request to create support ticket
+        response = requests.post(
+            f"{customer_care_url}/ticket",
+            headers={"Content-Type": "application/json"},
+            json=payload,
+            timeout=10
+        )
+        
+        if response.status_code == 201:
+            ticket_info = response.json()
+            return {
+                "success": True,
+                "message": "Support ticket created successfully",
+                "ticket": ticket_info.get("ticket", {})
+            }
+        else:
+            error_info = response.json() if response.headers.get('content-type') == 'application/json' else {"error": "Unknown error"}
+            return {
+                "error": f"Failed to create support ticket. Status: {response.status_code}",
+                "details": error_info
+            }
+            
+    except requests.exceptions.Timeout:
+        return {"error": "Request timeout while creating support ticket"}
+    except requests.exceptions.RequestException as e:
+        return {"error": f"Network error: {str(e)}"}
+    except Exception as e:
+        return {"error": f"Unexpected error: {str(e)}"}
+
+
+def handler(event, _context) -> dict:
+    try:    
+        if 'body' in event:
+            try:
+                # Parse JSON body if it exists
+                if isinstance(event['body'], str):
+                    body = json.loads(event['body'])
+                else:
+                    body = event['body']
+                
+                # Extract prompt from body
+                prompt = body.get('prompt', prompt)
+            except (json.JSONDecodeError, TypeError):
+                # If body parsing fails, check if body is directly the prompt
+                if isinstance(event['body'], str):
+                    prompt = event['body']
+        
+        # Also check for direct prompt field in event (for Lambda test console)
+        elif 'prompt' in event:
+            prompt = event['prompt']
         
         travel_agent = Agent(
             model="apac.amazon.nova-micro-v1:0",
             system_prompt=SYSTEM_PROMPT,
-            tools=[track_package]  # Register the tool with the agent
+            tools=[track_package, create_support_ticket]  # Register both tools with the agent
         )
         
         response = travel_agent(prompt)

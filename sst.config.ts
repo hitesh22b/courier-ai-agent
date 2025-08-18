@@ -16,13 +16,13 @@ export default $config({
 
     const trackApi = new sst.aws.ApiGatewayV2("TrackApi");
 
-    trackApi.route("POST /track", "src/track-status.handler");
+    trackApi.route("GET /track/{id}", "src/track-status.handler");
 
     const pythonFunction = new sst.aws.Function("PythonHelloWorld", {
       handler: "python_functions/src/python_functions/hello.handler",
       runtime: "python3.12",
       url: true,
-      link: [trackApi],
+      link: [trackApi, customerCareApi],
        permissions: [
         {
           actions: [
