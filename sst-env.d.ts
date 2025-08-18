@@ -14,6 +14,10 @@ declare module "sst" {
       "type": "sst.aws.Function"
       "url": string
     }
+    "SessionsTable": {
+      "name": string
+      "type": "sst.aws.Dynamo"
+    }
     "TrackApi": {
       "type": "sst.aws.ApiGatewayV2"
       "url": string

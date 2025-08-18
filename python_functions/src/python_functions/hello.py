@@ -1,7 +1,29 @@
 import json
 import requests
+import boto3
+import os
 from strands import Agent, tool
 from sst import Resource
+
+ddb = boto3.resource('dynamodb')
+agent_state_table = ddb.Table(os.environ['SESSIONS_TABLE'])
+
+def get_session_history(user_id):
+    ddb_response = agent_state_table.get_item(Key={'sessionID': user_id})
+    item = ddb_response.get('Item')
+    if item:
+        messages=json.loads(item['state'])
+    else:
+        messages = []
+
+    print(f"messages={messages}")
+    return messages
+
+def update_session_history(user_id, messages):
+    agent_state_table.put_item(Item={
+        'sessionID': user_id,
+        'state': json.dumps(messages),
+    })
 
 SYSTEM_PROMPT = """You are a courier company assistant that can help customers track their packages and create support tickets
 
@@ -109,7 +131,11 @@ def create_support_ticket(email: str = None, phoneNo: str = None, issueDescripti
 
 
 def handler(event, _context) -> dict:
-    try:    
+    try:
+        # Initialize default values
+        prompt = "How can I help you today?"
+        user_id = "anonymous"
+        
         if 'body' in event:
             try:
                 # Parse JSON body if it exists
@@ -118,25 +144,37 @@ def handler(event, _context) -> dict:
                 else:
                     body = event['body']
                 
-                # Extract prompt from body
+                # Extract prompt and user_id from body
                 prompt = body.get('prompt', prompt)
+                user_id = body.get('user_id', body.get('userId', user_id))
+                
             except (json.JSONDecodeError, TypeError):
                 # If body parsing fails, check if body is directly the prompt
                 if isinstance(event['body'], str):
                     prompt = event['body']
         
-        # Also check for direct prompt field in event (for Lambda test console)
+        # Also check for direct fields in event (for Lambda test console)
         elif 'prompt' in event:
             prompt = event['prompt']
         
+        if 'user_id' in event:
+            user_id = event['user_id']
+        elif 'userId' in event:
+            user_id = event['userId']
+        
+        session_history = get_session_history(user_id)
         travel_agent = Agent(
             model="apac.amazon.nova-micro-v1:0",
             system_prompt=SYSTEM_PROMPT,
-            tools=[track_package, create_support_ticket]  # Register both tools with the agent
+            tools=[track_package, create_support_ticket],  # Register both tools with the agent
+            messages=session_history
         )
         
         response = travel_agent(prompt)
         
+        # Update session history with new messages after the conversation
+        update_session_history(user_id, travel_agent.messages)
+
         return {
             'statusCode': 200,
             'headers': {
@@ -145,7 +183,8 @@ def handler(event, _context) -> dict:
             },
             'body': json.dumps({
                 'response': str(response),
-                'prompt': prompt
+                'prompt': prompt,
+                'user_id': user_id
             })
         }
         

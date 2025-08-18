@@ -10,6 +10,14 @@ export default $config({
     };
   },
   async run() {
+    // Create DynamoDB table for session management
+    const sessionsTable = new sst.aws.Dynamo("SessionsTable", {
+      fields: {
+        sessionID: "string",
+      },
+      primaryIndex: { hashKey: "sessionID" },
+    });
+
     const customerCareApi = new sst.aws.ApiGatewayV2("CustomerCareApi");
 
     customerCareApi.route("POST /ticket", "src/customer-care.handler");
@@ -22,7 +30,10 @@ export default $config({
       handler: "python_functions/src/python_functions/hello.handler",
       runtime: "python3.12",
       url: true,
-      link: [trackApi, customerCareApi],
+      link: [trackApi, customerCareApi, sessionsTable],
+      environment: {
+        SESSIONS_TABLE: sessionsTable.name,
+      },
        permissions: [
         {
           actions: [
@@ -41,6 +52,7 @@ export default $config({
       customerCareApi: customerCareApi.url,
       trackApi: trackApi.url,
       pythonFunction: pythonFunction.url,
+      sessionsTable: sessionsTable.name,
     };
   },
 });
