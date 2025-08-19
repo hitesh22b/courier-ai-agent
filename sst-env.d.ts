@@ -9,6 +9,10 @@ declare module "sst" {
       "type": "sst.aws.ApiGatewayV2"
       "url": string
     }
+    "KnowledgeBaseApi": {
+      "type": "sst.aws.ApiGatewayV2"
+      "url": string
+    }
     "PythonHelloWorld": {
       "name": string
       "type": "sst.aws.Function"

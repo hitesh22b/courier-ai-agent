@@ -26,11 +26,15 @@ export default $config({
 
     trackApi.route("GET /track/{id}", "src/track-status.handler");
 
+    const knowledgeBaseApi = new sst.aws.ApiGatewayV2("KnowledgeBaseApi");
+
+    knowledgeBaseApi.route("POST /search", "src/knowledge-base-query.handler");
+
     const pythonFunction = new sst.aws.Function("PythonHelloWorld", {
       handler: "python_functions/src/python_functions/hello.handler",
       runtime: "python3.12",
       url: true,
-      link: [trackApi, customerCareApi, sessionsTable],
+      link: [trackApi, customerCareApi, sessionsTable, knowledgeBaseApi],
       environment: {
         SESSIONS_TABLE: sessionsTable.name,
       },
@@ -51,6 +55,7 @@ export default $config({
     return {
       customerCareApi: customerCareApi.url,
       trackApi: trackApi.url,
+      knowledgeBaseApi: knowledgeBaseApi.url,
       pythonFunction: pythonFunction.url,
       sessionsTable: sessionsTable.name,
     };

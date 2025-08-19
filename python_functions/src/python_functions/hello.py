@@ -25,12 +25,15 @@ def update_session_history(user_id, messages):
         'state': json.dumps(messages),
     })
 
-SYSTEM_PROMPT = """You are a courier company assistant that can help customers track their packages and create support tickets
+SYSTEM_PROMPT = """You are a helpful AI assistant for a courier and package delivery company. You help customers with:
 
-Use the support_ticket tool to create customer support ticket.
-Use the track_package tool to track customer packages.
+1. **Package Tracking**: Use the track_package tool to look up package status and delivery information using tracking numbers
+2. **Customer Support**: Use the create_support_ticket tool to create support tickets for issues, complaints, or inquiries  
+3. **Company Policies**: Use the search_knowledge_base tool to answer questions about delivery policies, shipping rates, restrictions, and procedures
 
-Provide the users with a friendly customer support response.
+Always be polite, professional, and helpful. If you need more information to assist the customer, ask clarifying questions. For package tracking, always use the exact tracking number provided. For support tickets, collect all necessary details including contact information.
+
+When answering policy questions, search the knowledge base first to provide accurate and up-to-date information about company policies and procedures.
 """
 
 @tool
@@ -130,6 +133,55 @@ def create_support_ticket(email: str = None, phoneNo: str = None, issueDescripti
         return {"error": f"Unexpected error: {str(e)}"}
 
 
+@tool
+def search_knowledge_base(query: str = None):
+    """
+    Search the company knowledge base for policies, procedures, and information
+    Args:
+        query: The search query to find relevant information
+    """
+    if not query:
+        return {"error": "Missing query parameter"}
+
+    try:
+        # Get the knowledge base API URL from SST resources
+        knowledge_base_url = Resource.KnowledgeBaseApi.url
+        
+        # Prepare the request payload
+        payload = {
+            "query": query
+        }
+        
+        # Make a POST request to search the knowledge base
+        response = requests.post(
+            f"{knowledge_base_url}/search",
+            headers={"Content-Type": "application/json"},
+            json=payload,
+            timeout=10
+        )
+        
+        if response.status_code == 200:
+            search_results = response.json()
+            return {
+                "success": True,
+                "query": query,
+                "results": search_results
+            }
+        else:
+            error_info = response.json() if response.headers.get('content-type') == 'application/json' else {"error": "Unknown error"}
+            return {
+                "error": f"Failed to search knowledge base. Status: {response.status_code}",
+                "details": error_info
+            }
+            
+    except requests.exceptions.Timeout:
+        return {"error": "Request timeout while searching knowledge base"}
+    except requests.exceptions.RequestException as e:
+        return {"error": f"Network error: {str(e)}"}
+    except Exception as e:
+        return {"error": f"Unexpected error: {str(e)}"}
+
+
 def handler(event, _context) -> dict:
     try:
         # Initialize default values
@@ -166,7 +218,7 @@ def handler(event, _context) -> dict:
         travel_agent = Agent(
             model="apac.amazon.nova-micro-v1:0",
             system_prompt=SYSTEM_PROMPT,
-            tools=[track_package, create_support_ticket],  # Register both tools with the agent
+            tools=[track_package, create_support_ticket, search_knowledge_base],  # Register all three tools with the agent
             messages=session_history
         )
         
